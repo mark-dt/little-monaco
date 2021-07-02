@@ -147,8 +147,8 @@ def uploadNewTags(srcDt, dstDt):
     commonTags = findCommonTags(srcAutoTags, dstAutoTags)
     # common tags get deleted and the new ones get uploaded
     tagsToDelte = [t for t in dstAutoTags if t['name'] in commonTags]
-    logging.info('Tags to delete:')
-    logging.info(tagsToDelte)
+    #logging.info('Tags to delete:')
+    #logging.info(tagsToDelte)
 
     for tag in tagsToDelte:
         dstDt.deleteAutoTag(tag['id'])
