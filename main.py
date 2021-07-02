@@ -9,10 +9,14 @@ Date:	dd.mm.yyyy
 Version: 0.1
 libs: argparse, json, urllib3
 """
+import json
+
 from dt_api import Dynatrace
 import logging
 import argparse
 import configparser
+import os
+import shutil
 import requests
 # supress SSL warnings
 import urllib3
@@ -65,8 +69,8 @@ def init():
         ]
     )
 
-    srcDt = Dynatrace(config['SRC-ENV']['URL'], config['SRC-ENV']['token'])
-    dstDt = Dynatrace(config['DST-ENV']['URL'], config['DST-ENV']['token'])
+    srcDt = Dynatrace(config['SRC-ENV']['URL'], config['SRC-ENV']['token'], config['SRC-ENV']['downloadFolderPath'])
+    dstDt = Dynatrace(config['DST-ENV']['URL'], config['DST-ENV']['token'], config['DST-ENV']['downloadFolderPath'])
     # TODO: check that src and dst are not same, check dt got initialized correctly (?)
     #dstDt = Dynatrace(ROOT_URL, TOKEN)
     return srcDt, dstDt
@@ -109,13 +113,44 @@ def uploadNewTags(srcDt, dstDt):
         t = srcDt.getSingleAutoTag(tag['id'])
         dstDt.pushAutoTag(t)
 
+def downloadDashboards(srcDt):
+    srcDashboards = srcDt.getDashboards()
+    directory = "Dashboards"
+
+    # Parent Directory path
+    parent_dir = srcDt.download_folder_path
+
+    # Path
+    path = os.path.join(parent_dir, directory)
+
+    try:
+        shutil.rmtree(path)
+    except OSError as e:
+        print("Error: %s - %s." % (e.filename, e.strerror))
+    # Create the directory
+    # 'GeeksForGeeks' in
+    # '/home / User / Documents'
+    os.mkdir(path)
+    for dashboard in srcDashboards:
+        dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
+
+        file_name = dashboardJson["dashboardMetadata"]["name"] + ".json"
+
+        completeName = os.path.join(path, file_name)
+
+        jsonString = json.dumps(dashboardJson)
+        jsonFile = open(completeName, "w")
+        jsonFile.write(jsonString)
+        jsonFile.close()
 
 def main():
     '''main'''
     srcDt, dstDt = init()
-    uploadNewTags(srcDt, dstDt)
-    srcAutoTags = srcDt.getAutoTags()
-    dstAutoTags = dstDt.getAutoTags()
+    #uploadNewTags(srcDt, dstDt)
+    #srcAutoTags = srcDt.getAutoTags()
+    #dstAutoTags = dstDt.getAutoTags()
+
+    downloadDashboards(srcDt)
 
     # update -> remove  dst tags and push new ones
     # for t in dstAutoTags:

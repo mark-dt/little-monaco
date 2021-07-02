@@ -8,13 +8,14 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class Dynatrace():
 
-    def __init__(self, url, token):
+    def __init__(self, url, token, download_folder_path):
         self.url = url
         self.token = token
         self.header = {
             "Authorization": "Api-TOKEN " + token,
             "Content-Type": "application/json"
         }
+        self.download_folder_path = download_folder_path
 
     def getAutoTags(self):
         logging.debug('Downloading all Tags from {}'.format(self.url))
@@ -45,6 +46,18 @@ class Dynatrace():
         tag['rules'].extend(rules)
         _payload = json.dumps(tag)
         self.make_request(_url, method='PUT', payload=_payload)
+
+    def getDashboards(self):
+        logging.debug('Downloading all Dashboards from {}'.format(self.url))
+        _url = self.url + '/api/config/v1/dashboards'
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json['dashboards']
+
+    def getSingleDashboard(self, dashboardId):
+        _url = self.url + '/api/config/v1/dashboards/' + dashboardId
+        res = self.make_request(_url, method='GET')
+        return json.loads(res.text)
 
     def getServiceName(self, svcId):
         print('get svc name')
