@@ -27,7 +27,7 @@ class Dynatrace():
     def getSingleAutoTag(self, tagId):
         _url = self.url + '/api/config/v1/autoTags/' + tagId
         res = self.make_request(_url, method='GET')
-        return json.dumps(res.text)
+        return json.loads(res.text)
 
     def deleteAutoTag(self, tagId):
         _url = self.url + '/api/config/v1/autoTags/' + tagId
@@ -36,14 +36,16 @@ class Dynatrace():
 
     def pushAutoTag(self, tag):
         _url = self.url + '/api/config/v1/autoTags'
+        logging.info('Uploading new Tag: {}'.format(tag['name']))
         _payload = json.dumps(tag)
-        self.make_request(_url, method='POST', payload=_payload)
+        res = self.make_request(_url, method='POST', payload=_payload)
+        return res.status_code
 
-    def updateTag(self, tagId, rules):
+    def updateTag(self, tag):
         #TODO: updates the tag with the new passed ruls
+        tagId = tag['id']
+        logging.info('Updating Tag: {}'.format(tag['name']))
         _url = self.url + '/api/config/v1/autoTags/' + tagId
-        tag = self.getSingleAutoTag(tagId)
-        tag['rules'].extend(rules)
         _payload = json.dumps(tag)
         self.make_request(_url, method='PUT', payload=_payload)
 
@@ -87,8 +89,8 @@ class Dynatrace():
         except requests.exceptions.RequestException as exception:
             logging.error(exception)
             raise SystemExit(exception)
-#        if res.status_code > 399:
-#            print(res.text)
-#            logging.error(res.text)
-#            exit(-1)
+        if res.status_code > 399:
+            print(res.text)
+            logging.error(res.text)
+            #exit(-1)
         return res
