@@ -15,17 +15,20 @@ import json
 import requests
 import configparser
 import argparse
+import os
+import shutil
 from dt_api import Dynatrace
 import logging
 logging.basicConfig(
     # level=logging.DEBUG,
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("logs/little_monaco.log"),
-        logging.StreamHandler()
+      logging.FileHandler("logs/little_monaco.log"),
+      logging.StreamHandler()
     ]
 )
+
 # supress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -66,8 +69,8 @@ def init():
         "Content-Type": "application/json"
     }
 
-    srcDt = Dynatrace(config['SRC-ENV']['URL'], config['SRC-ENV']['token'])
-    dstDt = Dynatrace(config['DST-ENV']['URL'], config['DST-ENV']['token'])
+    srcDt = Dynatrace(config['SRC-ENV']['URL'], config['SRC-ENV']['token'], config['SRC-ENV']['downloadFolderPath'], config['SRC-ENV']['env_name'])
+    dstDt = Dynatrace(config['DST-ENV']['URL'], config['DST-ENV']['token'], config['DST-ENV']['downloadFolderPath'], config['DST-ENV']['env_name'])
     # TODO: check that src and dst are not same, check dt got initialized correctly (?)
     #dstDt = Dynatrace(ROOT_URL, TOKEN)
     return srcDt, dstDt
@@ -167,6 +170,44 @@ def uploadNewTags(srcDt, dstDt):
             time.sleep(1)
             res = dstDt.pushAutoTag(tag_json)
 
+def downloadDashboards(srcDt):
+    srcDashboards = srcDt.getDashboards()
+    directory = "Dashboards"
+
+    # Parent Directory path
+    parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
+    # Dashboard folder Path
+    path = os.path.join(parent_dir, directory)
+
+    if not os.path.isdir(parent_dir):
+        os.mkdir(parent_dir)
+        logging.debug('Config Download folder created')
+    else:
+        if os.path.isdir(os.path.join(parent_dir, directory)):
+            # Delete the exsiting Dashboard
+            try:
+                shutil.rmtree(path)
+            except OSError as e:
+                print("Error: %s - %s." % (e.filename, e.strerror))
+                logging.error("Unable to delete folder " + e.filename + ":" + e.strerror)
+
+    # Create the directory
+    # 'Dashboards' in
+    #  the corresponding env download folder
+    os.mkdir(path)
+    logging.debug('Dashboards folder created inside Config Download folder')
+    for dashboard in srcDashboards:
+        dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
+
+        file_name = dashboardJson["dashboardMetadata"]["name"] + ".json"
+
+        completeName = os.path.join(path, file_name)
+
+        jsonString = json.dumps(dashboardJson)
+        jsonFile = open(completeName, "w")
+        jsonFile.write(jsonString)
+        jsonFile.close()
+        logging.debug('Dashboard {} downloaded'.format(dashboardJson["dashboardMetadata"]["name"]))
 
 def main():
     '''main'''
@@ -176,6 +217,8 @@ def main():
         uploadNewTags(srcDt, dstDt)
     elif CMD == 'mergeTags':
         mergeTags(srcDt, dstDt)
+    elif CMD == "downloadDashboards":
+        downloadDashboards(srcDt)
 
 
 # >>> exampleSet = [{'type':'type1'},{'type':'type2'},{'type':'type2'}, {'type':'type3'}]
