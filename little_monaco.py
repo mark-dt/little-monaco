@@ -52,6 +52,15 @@ def cmdline_args():
                         help='Run without changing anything')
     return parser.parse_args()
 
+def extractEnv(url):
+    url = url.split('.')
+    if url[1] == 'sprint' or url[1] == 'live':
+        env_name = url[0][8:]
+    # managed ?
+    else:
+        url = url.split('/')
+        env_name = url[4]
+    return env_name
 
 def init():
     '''initialize parameters'''
@@ -69,8 +78,20 @@ def init():
         "Content-Type": "application/json"
     }
 
-    srcDt = Dynatrace(config['SRC-ENV']['URL'], config['SRC-ENV']['token'], config['SRC-ENV']['downloadFolderPath'], config['SRC-ENV']['env_name'])
-    dstDt = Dynatrace(config['DST-ENV']['URL'], config['DST-ENV']['token'], config['DST-ENV']['downloadFolderPath'], config['DST-ENV']['env_name'])
+    # extract ID from URL
+    srcEnv = extractEnv(config['SRC-ENV']['URL'])
+    dstEnv = extractEnv(config['DST-ENV']['URL'])
+
+    if not os.path.isdir('./download'):
+        try:
+            os.mkdir('./download')
+            logging.debug('Download folder created')
+        except Exception as e:
+            logging.error('Cannot create dir download')
+    #downloadPathSrc = './download/' + srcEnv
+    #downloadPathDst = './download/' + dstEnv
+    srcDt = Dynatrace(config['SRC-ENV']['URL'], config['SRC-ENV']['token'], './download', srcEnv)
+    dstDt = Dynatrace(config['DST-ENV']['URL'], config['DST-ENV']['token'], './download', dstEnv)
     # TODO: check that src and dst are not same, check dt got initialized correctly (?)
     #dstDt = Dynatrace(ROOT_URL, TOKEN)
     return srcDt, dstDt
@@ -142,7 +163,7 @@ def mergeTags(srcDt, dstDt):
             tag['rules'].extend(raw_tag['rules'])
             dstDt.updateTag(tag)
 
-
+# Maybe not needed since merging also does this ?
 def uploadNewTags(srcDt, dstDt):
     '''uploads new tags withou deleting'''
     srcAutoTags = srcDt.getAutoTags()
@@ -180,8 +201,11 @@ def downloadDashboards(srcDt):
     path = os.path.join(parent_dir, directory)
 
     if not os.path.isdir(parent_dir):
-        os.mkdir(parent_dir)
-        logging.debug('Config Download folder created')
+        try:
+            os.mkdir(parent_dir)
+            logging.debug('Config Download folder created')
+        except Exception as e:
+            logging.error('Cannot create dir {}'.format(parent_dir))
     else:
         if os.path.isdir(os.path.join(parent_dir, directory)):
             # Delete the exsiting Dashboard
@@ -202,8 +226,9 @@ def downloadDashboards(srcDt):
         file_name = dashboardJson["dashboardMetadata"]["name"] + ".json"
 
         completeName = os.path.join(path, file_name)
-
-        jsonString = json.dumps(dashboardJson)
+        del dashboardJson['metadata']
+        del dashboardJson['id']
+        jsonString = json.dumps(dashboardJson, sort_keys=True, indent=4)
         jsonFile = open(completeName, "w")
         jsonFile.write(jsonString)
         jsonFile.close()

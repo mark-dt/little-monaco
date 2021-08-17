@@ -94,7 +94,7 @@ class Dynatrace():
                 print('Unkown Method')
                 logging.error('Unkown Request Method')
                 exit(-1)
-        except requests.exceptions.RequestException as exception:
+        except Exception as exception:
             logging.error(exception)
             raise SystemExit(exception)
         if res.status_code > 399:

@@ -139,3 +139,4 @@ cython_debug/
 
 # ignore ini fies
 *.ini
+download
