@@ -75,6 +75,21 @@ class Dynatrace():
     def getServiceNameList(self):
         print('get svc name list')
 
+    def getAlertingProfiles(self):
+        logging.debug('Downloading alerting profiles')
+        _url = self.url + '/api/config/v1/alertingProfiles'
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json['values']
+
+    def getSingleAlertingProfile(self, profileId):
+        logging.debug('Downloading alerting profiles')
+        _url = self.url + '/api/config/v1/alertingProfiles/' + profileId
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json
+
+
     def make_request(self, url, parameters=None, method=None, payload=None):
         '''makes post or get request request'''
         try:

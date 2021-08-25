@@ -2,7 +2,7 @@
 """
 Short description of the scripts functionality
 Example (in your terminal):
-    $ python3 little_monaco.py 
+    $ python3 little_monaco.py
 
 Author: Mark Bley
 Date:	28.06.2021
@@ -24,8 +24,8 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-      logging.FileHandler("logs/little_monaco.log"),
-      logging.StreamHandler()
+        logging.FileHandler("logs/little_monaco.log"),
+        logging.StreamHandler()
     ]
 )
 
@@ -36,7 +36,8 @@ ROOT_URL = ''
 TOKEN = ''
 HEADER = ''
 DRY_RUN = ''
-CMD = ''
+#CMD = ''
+DOWNLOAD = False
 
 
 def cmdline_args():
@@ -47,10 +48,13 @@ def cmdline_args():
     parser.add_argument('-c', '--config', type=str, help='Path to config',
                         default='./config.ini')
     parser.add_argument('-cmd', '--command', type=str,
-                        help='e.g. updateTags or mergeTags', required=True)
+                        help='e.g. updateTags or mergeTags')
+    parser.add_argument('--download', action='store_true',
+                        help='Specify what to download', default=False)
     parser.add_argument('-d', '--dry-run', action='store_true',
                         help='Run without changing anything')
     return parser.parse_args()
+
 
 def extractEnv(url):
     url = url.split('.')
@@ -62,9 +66,11 @@ def extractEnv(url):
         env_name = url[4]
     return env_name
 
+
 def init():
     '''initialize parameters'''
-    global ROOT_URL, TOKEN, HEADER, DRY_RUN, CMD
+    global ROOT_URL, TOKEN, HEADER, DRY_RUN, DOWNLOAD
+    parameters = {}
     args = cmdline_args()
     config_path = args.config
     DRY_RUN = args.dry_run
@@ -78,6 +84,17 @@ def init():
         "Content-Type": "application/json"
     }
 
+    # TODO: specify API endpoints to download ?
+    #downloadList = []
+    #if ',' in args.download:
+    #    downloadList = args.download.lower().split(',')
+    #elif args.download != 'ALL':
+    #    downloadList.append(args.download.lower())
+
+    #parameters['downloadList'] = downloadList
+    if args.download:
+        DOWNLOAD = True
+
     # extract ID from URL
     srcEnv = extractEnv(config['SRC-ENV']['URL'])
     dstEnv = extractEnv(config['DST-ENV']['URL'])
@@ -90,11 +107,13 @@ def init():
             logging.error('Cannot create dir download')
     #downloadPathSrc = './download/' + srcEnv
     #downloadPathDst = './download/' + dstEnv
-    srcDt = Dynatrace(config['SRC-ENV']['URL'], config['SRC-ENV']['token'], './download', srcEnv)
-    dstDt = Dynatrace(config['DST-ENV']['URL'], config['DST-ENV']['token'], './download', dstEnv)
+    srcDt = Dynatrace(config['SRC-ENV']['URL'],
+                      config['SRC-ENV']['token'], './download', srcEnv)
+    dstDt = Dynatrace(config['DST-ENV']['URL'],
+                      config['DST-ENV']['token'], './download', dstEnv)
     # TODO: check that src and dst are not same, check dt got initialized correctly (?)
     #dstDt = Dynatrace(ROOT_URL, TOKEN)
-    return srcDt, dstDt
+    return srcDt, dstDt, parameters
 
 
 def findNewTags(srcAutoTags, dstAutoTags):
@@ -164,6 +183,8 @@ def mergeTags(srcDt, dstDt):
             dstDt.updateTag(tag)
 
 # Maybe not needed since merging also does this ?
+
+
 def uploadNewTags(srcDt, dstDt):
     '''uploads new tags withou deleting'''
     srcAutoTags = srcDt.getAutoTags()
@@ -172,7 +193,7 @@ def uploadNewTags(srcDt, dstDt):
     # common tags get deleted and the new ones get uploaded
     tagsToDelte = [t for t in dstAutoTags if t['name'] in commonTags]
     #logging.info('Tags to delete:')
-    #logging.info(tagsToDelte)
+    # logging.info(tagsToDelte)
 
     for tag in tagsToDelte:
         dstDt.deleteAutoTag(tag['id'])
@@ -191,10 +212,8 @@ def uploadNewTags(srcDt, dstDt):
             time.sleep(1)
             res = dstDt.pushAutoTag(tag_json)
 
-def downloadDashboards(srcDt):
-    srcDashboards = srcDt.getDashboards()
-    directory = "Dashboards"
 
+def createDownloadDir(srcDt, directory):
     # Parent Directory path
     parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
     # Dashboard folder Path
@@ -213,12 +232,21 @@ def downloadDashboards(srcDt):
                 shutil.rmtree(path)
             except OSError as e:
                 print("Error: %s - %s." % (e.filename, e.strerror))
-                logging.error("Unable to delete folder " + e.filename + ":" + e.strerror)
+                logging.error("Unable to delete folder " +
+                              e.filename + ":" + e.strerror)
 
     # Create the directory
     # 'Dashboards' in
     #  the corresponding env download folder
     os.mkdir(path)
+    return path
+
+
+def downloadDashboards(srcDt):
+    srcDashboards = srcDt.getDashboards()
+    directory = "Dashboards"
+    path = createDownloadDir(srcDt, directory)
+
     logging.debug('Dashboards folder created inside Config Download folder')
     for dashboard in srcDashboards:
         dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
@@ -228,22 +256,68 @@ def downloadDashboards(srcDt):
         completeName = os.path.join(path, file_name)
         del dashboardJson['metadata']
         del dashboardJson['id']
-        jsonString = json.dumps(dashboardJson, sort_keys=True, indent=4)
+        storeEntity(dashboardJson, path, file_name)
+        #jsonString = json.dumps(dashboardJson, sort_keys=True, indent=4)
+        #sonFile = open(completeName, "w")
+        #jsonFile.write(jsonString)
+        #jsonFile.close()
+        #logging.debug('Dashboard {} downloaded'.format(
+        #    dashboardJson["dashboardMetadata"]["name"]))
+
+def storeEntity(jsonEntity, path, fileName):
+        completeName = os.path.join(path, fileName)
+        jsonString = json.dumps(jsonEntity, sort_keys=True, indent=4)
         jsonFile = open(completeName, "w")
         jsonFile.write(jsonString)
         jsonFile.close()
-        logging.debug('Dashboard {} downloaded'.format(dashboardJson["dashboardMetadata"]["name"]))
+        logging.debug('Created %s', fileName)
+
+def downloadAutoTags(srcDt):
+    autoTagList = srcDt.getAutoTags()
+    directory = "AutoTags"
+    path = createDownloadDir(srcDt, directory)
+
+    logging.debug('Tag folder created inside Config Download folder')
+    for tag in autoTagList:
+        tagJson = srcDt.getSingleAutoTag(tag['id'])
+        #dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
+        file_name = tagJson["name"] + ".json"
+        del tagJson['metadata']
+        del tagJson['id']
+        storeEntity(tagJson, path, file_name)
+
+
+def downloadAlertingProfiles(srcDt):
+    autoTagList = srcDt.getAlertingProfiles()
+    directory = "AlertingProfiles"
+    path = createDownloadDir(srcDt, directory)
+
+    logging.debug('AlertingProfiles folder created inside Config Download folder')
+    #print(autoTagList)
+    for tag in autoTagList:
+        tagJson = srcDt.getSingleAlertingProfile(tag['id'])
+        file_name = tagJson["displayName"] + ".json"
+        del tagJson['metadata']
+        del tagJson['id']
+        storeEntity(tagJson, path, file_name)
+
+
 
 def main():
     '''main'''
-    srcDt, dstDt = init()
+    srcDt, dstDt, params = init()
+    if DOWNLOAD:
+        # download everything
+        #downloadAutoTags(srcDt)
+        #downloadDashboards(srcDt)
+        downloadAlertingProfiles(srcDt)
     #uploadNewTags(srcDt, dstDt)
-    if CMD == 'updateTags':
-        uploadNewTags(srcDt, dstDt)
-    elif CMD == 'mergeTags':
-        mergeTags(srcDt, dstDt)
-    elif CMD == "downloadDashboards":
-        downloadDashboards(srcDt)
+    #if CMD == 'updateTags':
+    #    uploadNewTags(srcDt, dstDt)
+    #elif CMD == 'mergeTags':
+    #    mergeTags(srcDt, dstDt)
+    #elif CMD == "downloadDashboards":
+    #    downloadDashboards(srcDt)
 
 
 # >>> exampleSet = [{'type':'type1'},{'type':'type2'},{'type':'type2'}, {'type':'type3'}]
