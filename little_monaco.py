@@ -57,9 +57,9 @@ def cmdline_args():
 
 
 def extractEnv(url):
-    url = url.split('.')
-    if url[1] == 'sprint' or url[1] == 'live':
-        env_name = url[0][8:]
+    tmp_url = url.split('.')
+    if tmp_url[1] == 'sprint' or tmp_url[1] == 'live':
+        env_name = tmp_url[0][8:]
     # managed ?
     else:
         url = url.split('/')
@@ -84,35 +84,41 @@ def init():
         "Content-Type": "application/json"
     }
 
+
+    # extract ID from URL
+    srcEnv = extractEnv(config['SRC-ENV']['URL'])
+    dstEnv = extractEnv(config['DST-ENV']['URL'])
+    #downloadPathSrc = './download/' + srcEnv
+    #downloadPathDst = './download/' + dstEnv
+    tmpUrl = config['SRC-ENV']['URL']
+    srcUrl = tmpUrl[:-1] if tmpUrl[-1] == '/' else tmpUrl
+    tmpUrl = config['DST-ENV']['URL']
+    dstUrl = tmpUrl[:-1] if tmpUrl[-1] == '/' else tmpUrl
+    srcDt = Dynatrace(srcUrl, config['SRC-ENV']['token'], './download', srcEnv)
+    dstDt = Dynatrace(dstUrl, config['DST-ENV']['token'], './download', dstEnv)
+    # TODO: check that src and dst are not same, check dt got initialized correctly (?)
+    #dstDt = Dynatrace(ROOT_URL, TOKEN)
+
     # TODO: specify API endpoints to download ?
     #downloadList = []
-    #if ',' in args.download:
+    # if ',' in args.download:
     #    downloadList = args.download.lower().split(',')
-    #elif args.download != 'ALL':
+    # elif args.download != 'ALL':
     #    downloadList.append(args.download.lower())
 
     #parameters['downloadList'] = downloadList
     if args.download:
         DOWNLOAD = True
+        download = './download'
+        if not os.path.isdir(download):
+            try:
+                os.mkdir(download)
+                logging.debug('Download folder created')
+            except Exception as e:
+                logging.error('Cannot create dir download')
+        
+        #path = os.path.join(download, srcEnv)
 
-    # extract ID from URL
-    srcEnv = extractEnv(config['SRC-ENV']['URL'])
-    dstEnv = extractEnv(config['DST-ENV']['URL'])
-
-    if not os.path.isdir('./download'):
-        try:
-            os.mkdir('./download')
-            logging.debug('Download folder created')
-        except Exception as e:
-            logging.error('Cannot create dir download')
-    #downloadPathSrc = './download/' + srcEnv
-    #downloadPathDst = './download/' + dstEnv
-    srcDt = Dynatrace(config['SRC-ENV']['URL'],
-                      config['SRC-ENV']['token'], './download', srcEnv)
-    dstDt = Dynatrace(config['DST-ENV']['URL'],
-                      config['DST-ENV']['token'], './download', dstEnv)
-    # TODO: check that src and dst are not same, check dt got initialized correctly (?)
-    #dstDt = Dynatrace(ROOT_URL, TOKEN)
     return srcDt, dstDt, parameters
 
 
@@ -218,7 +224,6 @@ def createDownloadDir(srcDt, directory):
     parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
     # Dashboard folder Path
     path = os.path.join(parent_dir, directory)
-
     if not os.path.isdir(parent_dir):
         try:
             os.mkdir(parent_dir)
@@ -246,38 +251,48 @@ def downloadDashboards(srcDt):
     srcDashboards = srcDt.getDashboards()
     directory = "Dashboards"
     path = createDownloadDir(srcDt, directory)
-
+    logging.info("Downloading %s", directory)
     logging.debug('Dashboards folder created inside Config Download folder')
     for dashboard in srcDashboards:
         dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
 
         file_name = dashboardJson["dashboardMetadata"]["name"] + ".json"
 
-        completeName = os.path.join(path, file_name)
+        try:
+            completeName = os.path.join(path, file_name)
+        except Exception as e:
+            logging.error('Invalid name %s', file_name)
+            continue
         del dashboardJson['metadata']
         del dashboardJson['id']
         storeEntity(dashboardJson, path, file_name)
         #jsonString = json.dumps(dashboardJson, sort_keys=True, indent=4)
         #sonFile = open(completeName, "w")
-        #jsonFile.write(jsonString)
-        #jsonFile.close()
-        #logging.debug('Dashboard {} downloaded'.format(
+        # jsonFile.write(jsonString)
+        # jsonFile.close()
+        # logging.debug('Dashboard {} downloaded'.format(
         #    dashboardJson["dashboardMetadata"]["name"]))
 
+
 def storeEntity(jsonEntity, path, fileName):
-        completeName = os.path.join(path, fileName)
-        jsonString = json.dumps(jsonEntity, sort_keys=True, indent=4)
+    completeName = os.path.join(path, fileName)
+    jsonString = json.dumps(jsonEntity, sort_keys=True, indent=4)
+    try:
         jsonFile = open(completeName, "w")
-        jsonFile.write(jsonString)
-        jsonFile.close()
-        logging.debug('Created %s', fileName)
+    except Exception as e:
+        logging.error('Invalid name %s', completeName)
+        return
+    jsonFile.write(jsonString)
+    jsonFile.close()
+    logging.debug('Created %s', fileName)
+
 
 def downloadAutoTags(srcDt):
     autoTagList = srcDt.getAutoTags()
     directory = "AutoTags"
     path = createDownloadDir(srcDt, directory)
-
-    logging.debug('Tag folder created inside Config Download folder')
+    logging.info("Downloading %s", directory)
+    logging.debug('%s folder created inside Config Download folder', directory)
     for tag in autoTagList:
         tagJson = srcDt.getSingleAutoTag(tag['id'])
         #dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
@@ -292,8 +307,8 @@ def downloadAlertingProfiles(srcDt):
     directory = "AlertingProfiles"
     path = createDownloadDir(srcDt, directory)
 
-    logging.debug('AlertingProfiles folder created inside Config Download folder')
-    #print(autoTagList)
+    logging.debug('%s folder created inside Config Download folder', directory)
+    # print(autoTagList)
     for tag in autoTagList:
         tagJson = srcDt.getSingleAlertingProfile(tag['id'])
         file_name = tagJson["displayName"] + ".json"
@@ -302,27 +317,71 @@ def downloadAlertingProfiles(srcDt):
         storeEntity(tagJson, path, file_name)
 
 
+def downloadCustomDevices(srcDt):
+    deviceList = srcDt.getCustomDevices()
+    directory = "CustomDevices"
+    path = createDownloadDir(srcDt, directory)
+    logging.info("Downloading %s", directory)
+    logging.debug('%s folder created inside Config Download folder', directory)
+
+    for device in deviceList:
+        deviceJson = srcDt.getCustomDevice(device['entityId'])
+        file_name = deviceJson["displayName"] + ".json"
+        storeEntity(deviceJson, path, file_name)
+
+
+def downloadProblemNotifications(srcDt):
+    deviceList = srcDt.getProblemNotification()
+    directory = "ProblemNotifications"
+    path = createDownloadDir(srcDt, directory)
+    logging.info("Downloading %s", directory)
+    logging.debug('%s folder created inside Config Download folder', directory)
+
+    for device in deviceList:
+        deviceJson = srcDt.getSingleProblemNotification(device['id'])
+        file_name = deviceJson["name"] + ".json"
+        storeEntity(deviceJson, path, file_name)
+
+
+def downloadApplicationDetectionRules(srcDt):
+    deviceList = srcDt.getApplicationDetectionRules()
+    directory = "ApplicationDetectionRules"
+    path = createDownloadDir(srcDt, directory)
+    logging.info("Downloading %s", directory)
+    logging.debug('%s folder created inside Config Download folder', directory)
+
+    for device in deviceList:
+        deviceJson = srcDt.getSingleApplicationDetectionRule(device['id'])
+        del deviceJson['metadata']
+        del deviceJson['id']
+        file_name = device["name"] + ".json"
+        storeEntity(deviceJson, path, file_name)
+
+
+def downlaodAll(srcDt):
+    # download everything
+    downloadAutoTags(srcDt)
+    downloadDashboards(srcDt)
+    downloadAlertingProfiles(srcDt)
+    downloadCustomDevices(srcDt)
+    downloadProblemNotifications(srcDt)
+    downloadApplicationDetectionRules(srcDt)
+
 
 def main():
     '''main'''
     srcDt, dstDt, params = init()
     if DOWNLOAD:
         # download everything
-        #downloadAutoTags(srcDt)
-        #downloadDashboards(srcDt)
-        downloadAlertingProfiles(srcDt)
+        downlaodAll(srcDt)
+        downlaodAll(dstDt)
     #uploadNewTags(srcDt, dstDt)
-    #if CMD == 'updateTags':
+    # if CMD == 'updateTags':
     #    uploadNewTags(srcDt, dstDt)
-    #elif CMD == 'mergeTags':
+    # elif CMD == 'mergeTags':
     #    mergeTags(srcDt, dstDt)
-    #elif CMD == "downloadDashboards":
+    # elif CMD == "downloadDashboards":
     #    downloadDashboards(srcDt)
-
-
-# >>> exampleSet = [{'type':'type1'},{'type':'type2'},{'type':'type2'}, {'type':'type3'}]
-# >>> keyValList = ['type2','type3']
-# >>> expectedResult = [d for d in exampleSet if d['type'] in keyValList]
 
 
 if __name__ == '__main__':

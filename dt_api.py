@@ -82,13 +82,68 @@ class Dynatrace():
         res_json = json.loads(res.text)
         return res_json['values']
 
+    def getProblemNotification(self):
+        logging.debug('Downloading Problem Notifications')
+        _url = self.url + '/api/config/v1/notifications'
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json['values']
+
+    def getSingleProblemNotification(self, profileId):
+        logging.debug('Downloading Problem Notification %s', profileId)
+        _url = self.url + '/api/config/v1/notifications/' + profileId
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json
+
     def getSingleAlertingProfile(self, profileId):
-        logging.debug('Downloading alerting profiles')
+        logging.debug('Downloading alerting profile %s', profileId)
         _url = self.url + '/api/config/v1/alertingProfiles/' + profileId
         res = self.make_request(_url, method='GET')
         res_json = json.loads(res.text)
         return res_json
 
+    def getCustomDevices(self):
+        '''returns json list with all hosts'''
+        url = self.url + '/api/v2/entities'
+        host_list = []
+        parameters = {'pageSize': 500,
+                      'entitySelector': 'type("CUSTOM_DEVICE"),tag("device_type")',
+                      # 'fields': '+properties.customhostmetadata,+managementzones',
+                      # 'fields': '+tags,+managementzones',
+                      'fields': '+properties.customProperties,+fromRelationships',
+                      'from': '-1w',
+                      'to': 'now'}
+        res = self.make_request(url, parameters=parameters, method='GET')
+        res_json = json.loads(res.text)
+        host_list.extend(res_json['entities'])
+        while 'nextPageKey' in res_json:
+            parameters = {'nextPageKey': res_json['nextPageKey']}
+            res = self.make_request(url, parameters, 'get')
+            res_json = json.loads(res.text)
+            host_list.extend(res_json['entities'])
+
+        return host_list
+
+    def getCustomDevice(self, device_id):
+        url = self.url + '/api/v2/entities/' + device_id
+        res = self.make_request(url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json
+
+    def getApplicationDetectionRules(self):
+        logging.debug('Downloading ApplicationDetectionRules')
+        _url = self.url + '/api/config/v1/applicationDetectionRules'
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json['values']
+
+    def getSingleApplicationDetectionRule(self, profileId):
+        logging.debug('Downloading Problem Notification %s', profileId)
+        _url = self.url + '/api/config/v1/applicationDetectionRules/' + profileId
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json
 
     def make_request(self, url, parameters=None, method=None, payload=None):
         '''makes post or get request request'''
