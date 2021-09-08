@@ -9,7 +9,10 @@ Date:	28.06.2021
 Version: 0.1
 libs: argparse, json, urllib3
 """
+import re
 import time
+
+
 import urllib3
 import json
 import requests
@@ -69,7 +72,7 @@ def extractEnv(url):
 
 def init():
     '''initialize parameters'''
-    global ROOT_URL, TOKEN, HEADER, DRY_RUN, DOWNLOAD
+    global ROOT_URL, TOKEN, HEADER, DRY_RUN, DOWNLOAD, CMD
     parameters = {}
     args = cmdline_args()
     config_path = args.config
@@ -142,6 +145,15 @@ def findCommonTags(srcAutoTags, dstAutoTags):
     # logging.info(intersection_as_list)
     return intersection_as_list
 
+
+def findCommonCustomEventsForAlerting(srcCustomEventsForAlerting, dstCustomEventsForAlerting):
+    srcTagNames = [t['name'] for t in srcCustomEventsForAlerting]
+    dstTagNames = [t['name'] for t in dstCustomEventsForAlerting]
+    list1_as_set = set(srcTagNames)
+    intersection = list1_as_set.intersection(dstTagNames)
+    intersection_as_list = list(intersection)
+    # logging.info(intersection_as_list)
+    return intersection_as_list
 
 def mergeTags(srcDt, dstDt):
     # push only new tags
@@ -217,6 +229,75 @@ def uploadNewTags(srcDt, dstDt):
             logging.info('waiting for update...')
             time.sleep(1)
             res = dstDt.pushAutoTag(tag_json)
+
+def uploadNewCustomEventsForAlerting(srcDt, dstDt):
+    '''uploads new custom events for alerting withou deleting'''
+    srcCustomEventsForAlerting = srcDt.getCustomEventsForAlerting()
+    dstCustomEventsForAlerting = dstDt.getCustomEventsForAlerting()
+    commonTags = findCommonCustomEventsForAlerting(srcCustomEventsForAlerting, dstCustomEventsForAlerting)
+    # common tags get deleted and the new ones get uploaded
+    customEventsForAlertingToDelete = [t for t in dstCustomEventsForAlerting if t['name'] in commonTags]
+    #logging.info('Tags to delete:')
+    # logging.info(tagsToDelte)
+
+    for customEventForAlerting in customEventsForAlertingToDelete:
+        dstDt.deleteCustomEventForAlerting(customEventForAlerting['id'])
+    time.sleep(2)
+    for customEvent in srcCustomEventsForAlerting:
+        customEvent_json = srcDt.getSingleCustomEventForAlerting(customEvent['id'])
+        #tag_json = json.loads(t)
+        customEvent_json.pop('metadata')
+        customEvent_id = customEvent_json['id']
+        customEvent_json.pop('id')
+
+        res = dstDt.pushCustomEventForAlerting(customEvent_json)
+        while res > 399:
+            dstDt.deleteCustomEventForAlerting(customEvent_id)
+            logging.info('waiting for update...')
+            time.sleep(1)
+            res = dstDt.pushCustomEventForAlerting(customEvent_json)
+
+
+def uploadNewCustomEventsForAlertingFromLocal(srcDt, dstDt):
+    '''read custom events for alerting from local download folder'''
+    directory = "CustomEventsForAlerting"
+    parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
+    # Custom events for alerting folder Path
+    path = os.path.join(parent_dir, directory)
+    localCustomEvents = []
+    for file_name in [file for file in os.listdir(path) if file.endswith('.json')]:
+        with open(path + "\\" + file_name) as json_file:
+            localCustomEvents.append(json.load(json_file))
+
+    '''push custom event to dst if it does not exist already'''
+    dstCustomEventsForAlerting = dstDt.getCustomEventsForAlerting()
+    dstCustomEventsForAlertingNames = []
+    for customEvent in dstCustomEventsForAlerting:
+        dstCustomEventsForAlertingNames.append(customEvent["name"])
+    for customEvent in localCustomEvents:
+        if customEvent["name"] not in dstCustomEventsForAlertingNames:
+            dstDt.pushCustomEventForAlerting(customEvent)
+
+
+def uploadNewAlertingProfilesFromLocal(srcDt, dstDt):
+    '''read custom events for alerting from local download folder'''
+    directory = "AlertingProfiles"
+    parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
+    # Custom events for alerting folder Path
+    path = os.path.join(parent_dir, directory)
+    localAlertingProfiles = []
+    for file_name in [file for file in os.listdir(path) if file.endswith('.json')]:
+        with open(path + "\\" + file_name) as json_file:
+            localAlertingProfiles.append(json.load(json_file))
+
+    '''push custom event to dst if it does not exist already'''
+    dstAlertingProfiles = dstDt.getAlertingProfiles()
+    dstAlertingProfilesNames = []
+    for alertingProfile in dstAlertingProfiles:
+        dstAlertingProfilesNames.append(alertingProfile["name"])
+    for alertingProfile in localAlertingProfiles:
+        if alertingProfile["displayName"] not in dstAlertingProfilesNames:
+            dstDt.pushAlertingProfile(alertingProfile)
 
 
 def createDownloadDir(srcDt, directory):
@@ -331,7 +412,7 @@ def downloadCustomDevices(srcDt):
 
 
 def downloadProblemNotifications(srcDt):
-    deviceList = srcDt.getProblemNotification()
+    deviceList = srcDt.getProblemNotifications()
     directory = "ProblemNotifications"
     path = createDownloadDir(srcDt, directory)
     logging.info("Downloading %s", directory)
@@ -341,6 +422,43 @@ def downloadProblemNotifications(srcDt):
         deviceJson = srcDt.getSingleProblemNotification(device['id'])
         file_name = deviceJson["name"] + ".json"
         storeEntity(deviceJson, path, file_name)
+
+
+def uploadNewProblemNotificationsFromLocal(srcDt, dstDt):
+    '''read problem notifications from local download folder'''
+    directory = "ProblemNotifications"
+    parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
+    # Custom events for alerting folder Path
+    path = os.path.join(parent_dir, directory)
+    localProblemNotifications = []
+    for file_name in [file for file in os.listdir(path) if file.endswith('.json')]:
+        with open(path + "\\" + file_name) as json_file:
+            localProblemNotifications.append(json.load(json_file))
+
+    '''push new problem notification to dst if it does not exist already'''
+    srcAlertingProfiles = srcDt.getAlertingProfiles()
+    dstAlertingProfiles = dstDt.getAlertingProfiles()
+    dstProblemNotifications = dstDt.getProblemNotifications()
+    dstProblemNotificationsNames = []
+    dstAlertingProfilesNames = []
+    #create list of problem notification names from dstEnv
+    for problemNotification in dstProblemNotifications:
+        dstProblemNotificationsNames.append(problemNotification["name"])
+    #create list of alerting profile names from dstEnv
+    for alertingProfile in dstAlertingProfiles:
+        dstAlertingProfilesNames.append(alertingProfile["name"])
+    for problemNotification in localProblemNotifications:
+        alertingProfileSrc = next((x for x in srcAlertingProfiles if x["id"] == problemNotification["alertingProfile"]), None)
+        alertingProfileDst = next((x for x in dstAlertingProfiles if x["name"] == alertingProfileSrc["name"]), None)
+        #check if current exists already in dstEnv based on name
+        if problemNotification["name"] not in dstProblemNotificationsNames:
+            #check if alerting profile defined in dstEnv as well based on name
+            if(alertingProfileSrc["name"] in dstAlertingProfilesNames):
+                problemNotification["alertingProfile"] = alertingProfileDst["id"]
+                del problemNotification['id']
+                dstDt.pushProblemNotification(problemNotification)
+            else:
+                logging.error("Alerting profile " + alertingProfileSrc["name"] + " was not found in dstEnv")
 
 
 def downloadApplicationDetectionRules(srcDt):
@@ -358,15 +476,32 @@ def downloadApplicationDetectionRules(srcDt):
         storeEntity(deviceJson, path, file_name)
 
 
+def downloadCustomEventsForAlerting(srcDt):
+    customEventsList = srcDt.getCustomEventsForAlerting()
+    directory = "CustomEventsForAlerting"
+    path = createDownloadDir(srcDt, directory)
+    logging.info("Downloading %s", directory)
+    logging.debug('%s folder created inside Config Download folder', directory)
+
+    for customEvent in customEventsList:
+        customEventJson = srcDt.getSingleCustomEventForAlerting(customEvent['id'])
+        del customEventJson['metadata']
+        del customEventJson['id']
+        customEvent["name"] = re.sub("[/:*?\"<>|]","",customEvent["name"])
+        customEvent["name"].replace("\\", "")
+        file_name = customEvent["name"] + ".json"
+        storeEntity(customEventJson, path, file_name)
+
+
 def downlaodAll(srcDt):
     # download everything
-    downloadAutoTags(srcDt)
-    downloadDashboards(srcDt)
+    #downloadAutoTags(srcDt)
+    #downloadDashboards(srcDt)
     downloadAlertingProfiles(srcDt)
-    downloadCustomDevices(srcDt)
-    downloadProblemNotifications(srcDt)
-    downloadApplicationDetectionRules(srcDt)
-
+    #downloadCustomDevices(srcDt)
+    #downloadProblemNotifications(srcDt)
+    #downloadApplicationDetectionRules(srcDt)
+    #downloadCustomEventsForAlerting(srcDt)
 
 def main():
     '''main'''
@@ -374,14 +509,23 @@ def main():
     if DOWNLOAD:
         # download everything
         downlaodAll(srcDt)
-        downlaodAll(dstDt)
+        #downlaodAll(dstDt)
     #uploadNewTags(srcDt, dstDt)
-    # if CMD == 'updateTags':
-    #    uploadNewTags(srcDt, dstDt)
-    # elif CMD == 'mergeTags':
-    #    mergeTags(srcDt, dstDt)
-    # elif CMD == "downloadDashboards":
-    #    downloadDashboards(srcDt)
+    if CMD == 'updateTags':
+        uploadNewTags(srcDt, dstDt)
+    elif CMD == 'mergeTags':
+        mergeTags(srcDt, dstDt)
+    elif CMD == "downloadDashboards":
+        downloadDashboards(srcDt)
+    elif CMD == "updateCustomEventsForAlerting":
+        uploadNewCustomEventsForAlerting(srcDt, dstDt)
+    elif CMD == "updateCustomEventsForAlertingFromLocal":
+        uploadNewCustomEventsForAlertingFromLocal(srcDt, dstDt)
+    elif CMD == "updateProblemNotificationsFromLocal":
+        uploadNewProblemNotificationsFromLocal(srcDt, dstDt)
+    elif CMD == "updateAlertingProfilesFromLocal":
+        uploadNewAlertingProfilesFromLocal(srcDt, dstDt)
+
 
 
 if __name__ == '__main__':
