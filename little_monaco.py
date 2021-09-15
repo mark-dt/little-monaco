@@ -22,6 +22,9 @@ import os
 import shutil
 from dt_api import Dynatrace
 import logging
+
+import tools
+
 logging.basicConfig(
     # level=logging.DEBUG,
     level=logging.DEBUG,
@@ -41,6 +44,7 @@ HEADER = ''
 DRY_RUN = ''
 #CMD = ''
 DOWNLOAD = False
+REPO = ''
 
 
 def cmdline_args():
@@ -54,6 +58,10 @@ def cmdline_args():
                         help='e.g. updateTags or mergeTags')
     parser.add_argument('--download', action='store_true',
                         help='Specify what to download', default=False)
+    parser.add_argument('--repo', type=str,
+                        help='Repository with environement config')
+    parser.add_argument('--environment', '-env', type=str,
+                        help='DT environment to work on')
     parser.add_argument('-d', '--dry-run', action='store_true',
                         help='Run without changing anything')
     return parser.parse_args()
@@ -72,7 +80,7 @@ def extractEnv(url):
 
 def init():
     '''initialize parameters'''
-    global ROOT_URL, TOKEN, HEADER, DRY_RUN, DOWNLOAD, CMD
+    global ROOT_URL, TOKEN, HEADER, DRY_RUN, DOWNLOAD, CMD, REPO
     parameters = {}
     args = cmdline_args()
     config_path = args.config
@@ -87,17 +95,36 @@ def init():
         "Content-Type": "application/json"
     }
 
+    if args.repo is not None:
+        REPO = args.repo
+    else:
+        logging.error('NO REPO DEFINED')
+        exit()
 
-    # extract ID from URL
-    srcEnv = extractEnv(config['SRC-ENV']['URL'])
-    dstEnv = extractEnv(config['DST-ENV']['URL'])
-    #downloadPathSrc = './download/' + srcEnv
-    #downloadPathDst = './download/' + dstEnv
-    tmpUrl = config['SRC-ENV']['URL']
+    if args.environment not in config:
+        logging.error('No valid environment found in config')
+        exit()
+    # extract ID from URL or use ALIS, maybe use directly a name passed as argument ?
+    if 'alias' in config[args.environment]:
+        srcEnv = config[args.environment]['alias']
+    else:
+        srcEnv = extractEnv(config[args.environment]['URL'])
+
+    # TODO: remove dst env ? in future only upload from local to single env in list
+    if 'alias' in config['DST-ENV']:
+        dstEnv = config['DST-ENV']['alias']
+    else:
+        dstEnv = extractEnv(config['DST-ENV']['URL'])
+        #downloadPathSrc = './download/' + srcEnv
+        #downloadPathDst = './download/' + dstEnv
+
+    # cleanup URLs
+    tmpUrl = config[args.environment]['URL']
     srcUrl = tmpUrl[:-1] if tmpUrl[-1] == '/' else tmpUrl
     tmpUrl = config['DST-ENV']['URL']
     dstUrl = tmpUrl[:-1] if tmpUrl[-1] == '/' else tmpUrl
-    srcDt = Dynatrace(srcUrl, config['SRC-ENV']['token'], './download', srcEnv)
+
+    srcDt = Dynatrace(srcUrl, config[args.environment]['token'], './download', srcEnv)
     dstDt = Dynatrace(dstUrl, config['DST-ENV']['token'], './download', dstEnv)
     # TODO: check that src and dst are not same, check dt got initialized correctly (?)
     #dstDt = Dynatrace(ROOT_URL, TOKEN)
@@ -119,18 +146,25 @@ def init():
                 logging.debug('Download folder created')
             except Exception as e:
                 logging.error('Cannot create dir download')
-        
-        #path = os.path.join(download, srcEnv)
 
+        #path = os.path.join(download, srcEnv)
+    if DRY_RUN:
+        logging.info('DRY_RUN')
     return srcDt, dstDt, parameters
 
 
+# TODO: CHANGE NAME !!
 def findNewTags(srcAutoTags, dstAutoTags):
-    srcTagNames = [t['name'] for t in srcAutoTags]
-    dstTagNames = [t['name'] for t in dstAutoTags]
-    # logging.info(srcTagNames)
-    # logging.info(dstTagNames)
-    setTagDiff = set(srcTagNames) - set(dstTagNames)
+    #srcTagNames = [t['name'] for t in srcAutoTags]
+    #dstTagNames = [t['name'] for t in dstAutoTags]
+    srcTagNames = srcAutoTags
+    dstTagNames = dstAutoTags
+    #logging.info(srcTagNames)
+    #logging.info(dstTagNames)
+    #if len(srcAutoTags) > len(dstAutoTags):
+    #    setTagDiff = set(srcTagNames) - set(dstTagNames)
+    #else:
+    setTagDiff =  set(dstTagNames) - set(srcTagNames)
     listTagDiff = list(setTagDiff)
     # logging.info(listTagDiff)
     return listTagDiff
@@ -203,6 +237,7 @@ def mergeTags(srcDt, dstDt):
 # Maybe not needed since merging also does this ?
 
 
+# TODO: remove or refactor this !!
 def uploadNewTags(srcDt, dstDt):
     '''uploads new tags withou deleting'''
     srcAutoTags = srcDt.getAutoTags()
@@ -218,44 +253,10 @@ def uploadNewTags(srcDt, dstDt):
     time.sleep(2)
     for tag in srcAutoTags:
         tag_json = srcDt.getSingleAutoTag(tag['id'])
-        #tag_json = json.loads(t)
-        tag_json.pop('metadata')
-        tag_id = tag_json['id']
-        tag_json.pop('id')
 
         res = dstDt.pushAutoTag(tag_json)
-        while res > 399:
-            dstDt.deleteAutoTag(tag_id)
-            logging.info('waiting for update...')
-            time.sleep(1)
-            res = dstDt.pushAutoTag(tag_json)
-
-def uploadNewCustomEventsForAlerting(srcDt, dstDt):
-    '''uploads new custom events for alerting withou deleting'''
-    srcCustomEventsForAlerting = srcDt.getCustomEventsForAlerting()
-    dstCustomEventsForAlerting = dstDt.getCustomEventsForAlerting()
-    commonTags = findCommonCustomEventsForAlerting(srcCustomEventsForAlerting, dstCustomEventsForAlerting)
-    # common tags get deleted and the new ones get uploaded
-    customEventsForAlertingToDelete = [t for t in dstCustomEventsForAlerting if t['name'] in commonTags]
-    #logging.info('Tags to delete:')
-    # logging.info(tagsToDelte)
-
-    for customEventForAlerting in customEventsForAlertingToDelete:
-        dstDt.deleteCustomEventForAlerting(customEventForAlerting['id'])
-    time.sleep(2)
-    for customEvent in srcCustomEventsForAlerting:
-        customEvent_json = srcDt.getSingleCustomEventForAlerting(customEvent['id'])
-        #tag_json = json.loads(t)
-        customEvent_json.pop('metadata')
-        customEvent_id = customEvent_json['id']
-        customEvent_json.pop('id')
-
-        res = dstDt.pushCustomEventForAlerting(customEvent_json)
-        while res > 399:
-            dstDt.deleteCustomEventForAlerting(customEvent_id)
-            logging.info('waiting for update...')
-            time.sleep(1)
-            res = dstDt.pushCustomEventForAlerting(customEvent_json)
+        if res.status_code > 399:
+            logging.error('Could not push auto-tag: %s', res.text)
 
 
 def uploadNewCustomEventsForAlertingFromLocal(srcDt, dstDt):
@@ -278,251 +279,123 @@ def uploadNewCustomEventsForAlertingFromLocal(srcDt, dstDt):
         if customEvent["name"] not in dstCustomEventsForAlertingNames:
             dstDt.pushCustomEventForAlerting(customEvent)
 
+def upload_custom_events(dst_dt):
+    _profiles_list = dst_dt.getCustomEventsForAlerting()
+    _profiles_names =[n['name'] for n in _profiles_list]
 
-def uploadNewAlertingProfilesFromLocal(srcDt, dstDt):
-    '''read custom events for alerting from local download folder'''
-    directory = "AlertingProfiles"
-    parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
-    # Custom events for alerting folder Path
-    path = os.path.join(parent_dir, directory)
-    localAlertingProfiles = []
-    for file_name in [file for file in os.listdir(path) if file.endswith('.json')]:
-        with open(path + "\\" + file_name) as json_file:
-            localAlertingProfiles.append(json.load(json_file))
+    _path = os.path.join(REPO, 'custom-events-for-alerting')
+    _repo_files = [f.split('.')[0] for f in os.listdir(_path) if f.endswith('.json') and not f.startswith('_map')]
 
-    '''push custom event to dst if it does not exist already'''
-    dstAlertingProfiles = dstDt.getAlertingProfiles()
-    dstAlertingProfilesNames = []
-    for alertingProfile in dstAlertingProfiles:
-        dstAlertingProfilesNames.append(alertingProfile["name"])
-    for alertingProfile in localAlertingProfiles:
-        if alertingProfile["displayName"] not in dstAlertingProfilesNames:
-            dstDt.pushAlertingProfile(alertingProfile)
+    # only push new profiles
+    _new_porfiles = findNewTags(_profiles_names, _repo_files)
+
+    for profile in _new_porfiles:
+        profile_json = tools.get_json(_path, profile)
+        if DRY_RUN:
+            logging.info('DRY_RUN: Uploading Custom Event Alerting %s', profile_json['name'])
+        else:
+            dst_dt.pushCustomEventForAlerting(profile_json)
 
 
-def createDownloadDir(srcDt, directory):
-    # Parent Directory path
-    parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
-    # Dashboard folder Path
-    path = os.path.join(parent_dir, directory)
-    if not os.path.isdir(parent_dir):
-        try:
-            os.mkdir(parent_dir)
-            logging.debug('Config Download folder created')
-        except Exception as e:
-            logging.error('Cannot create dir {}'.format(parent_dir))
-    else:
-        if os.path.isdir(os.path.join(parent_dir, directory)):
-            # Delete the exsiting Dashboard
-            try:
-                shutil.rmtree(path)
-            except OSError as e:
-                print("Error: %s - %s." % (e.filename, e.strerror))
-                logging.error("Unable to delete folder " +
-                              e.filename + ":" + e.strerror)
+def upload_alerting_profiles(dst_dt):
+    _profiles_list = dst_dt.getAlertingProfiles()
+    _profiles_names =[n['name'] for n in _profiles_list]
 
-    # Create the directory
-    # 'Dashboards' in
-    #  the corresponding env download folder
-    os.mkdir(path)
-    return path
+    _path = os.path.join(REPO, 'alerting-profile')
+    _repo_files = [f.split('.')[0] for f in os.listdir(_path) if f.endswith('.json') and not f.startswith('_map')]
+
+    # only push new profiles
+    _new_porfiles = findNewTags(_profiles_names, _repo_files)
+
+    for profile in _new_porfiles:
+        profile_json = tools.get_json(_path, profile)
+        if DRY_RUN:
+            logging.info('DRY_RUN: Uploading Alerting profile %s', profile_json['displayName'])
+        else:
+            dst_dt.pushAlertingProfile(profile_json)
 
 
-def downloadDashboards(srcDt):
-    srcDashboards = srcDt.getDashboards()
-    directory = "Dashboards"
-    path = createDownloadDir(srcDt, directory)
-    logging.info("Downloading %s", directory)
-    logging.debug('Dashboards folder created inside Config Download folder')
-    for dashboard in srcDashboards:
-        dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
+# should maybe be destination... -> dst_dt
+def upload_notifications(src_dt):
+    _notification_list = src_dt.getProblemNotifications()
+    _notification_names =[n['name'] for n in _notification_list]
 
-        file_name = dashboardJson["dashboardMetadata"]["name"] + ".json"
+    # get destination alerting profiles to check if the prob notificaiton alerting profiles are available on dest
+    _alerting_list = src_dt.getAlertingProfiles()
+    _alerting_names =[n['name'] for n in _alerting_list]
+    #print(_alerting_names)
+    #print(_notification_names)
+    #onlyfiles = [f for f in os.listdir(mypath) if f.endsWith() isfile(join(mypath, f))]
+    #_path = os.path.join(src_dt.download_folder_path, src_dt.env_name, 'notification')
+    _path = os.path.join(REPO, 'notification')
+    _onlyfiles = [f.split('.')[0] for f in os.listdir(_path) if f.endswith('.json') and not f.startswith('_map')]
+    #print(_onlyfiles)
+    _new_notification = findNewTags(_notification_names, _onlyfiles)
+    # get map from alertin profiles
+    #_map_path = os.path.join(src_dt.download_folder_path, src_dt.env_name, 'alerting-profile', '_map.json')
+    _map_path = os.path.join(REPO, 'alerting-profile', '_map.json')
+    _map_file = open(_map_path)
+    _map_json = json.load(_map_file)
+    #print(_map_json)
+    for _notification in _new_notification:
+        # open notification json
+        _file_path = os.path.join(_path, _notification + '.json')
+        _notification_file = open(_file_path)
+        _notification_json = json.load(_notification_file)
 
-        try:
-            completeName = os.path.join(path, file_name)
-        except Exception as e:
-            logging.error('Invalid name %s', file_name)
+        # get alerting_prilfe name from the map
+        _alerting_profile_name = _map_json[_notification_json['alertingProfile']]
+        # if the alerting profile is not in the destination env then do not porceed furhter
+        if _alerting_profile_name not in _alerting_names:
+            logging.error('Alertin profile %s, for Notification %s is not in %s', _alerting_profile_name, _notification_json['name'], src_dt.env_name)
             continue
-        del dashboardJson['metadata']
-        del dashboardJson['id']
-        storeEntity(dashboardJson, path, file_name)
-        #jsonString = json.dumps(dashboardJson, sort_keys=True, indent=4)
-        #sonFile = open(completeName, "w")
-        # jsonFile.write(jsonString)
-        # jsonFile.close()
-        # logging.debug('Dashboard {} downloaded'.format(
-        #    dashboardJson["dashboardMetadata"]["name"]))
+        # find id for of this profile and replace with old
+        _profile = [a for a in _alerting_list if a['name'] == _alerting_profile_name][0]
+        _notification_json['alertingProfile'] = _profile['id']
+        if DRY_RUN:
+            logging.info('DRY_RUN: Uploading Notification %s', _notification_json['name'])
+        else:
+            src_dt.pushProblemNotification(_notification_json)
 
 
-def storeEntity(jsonEntity, path, fileName):
-    completeName = os.path.join(path, fileName)
-    jsonString = json.dumps(jsonEntity, sort_keys=True, indent=4)
-    try:
-        jsonFile = open(completeName, "w")
-    except Exception as e:
-        logging.error('Invalid name %s', completeName)
-        return
-    jsonFile.write(jsonString)
-    jsonFile.close()
-    logging.debug('Created %s', fileName)
 
-
-def downloadAutoTags(srcDt):
-    autoTagList = srcDt.getAutoTags()
-    directory = "AutoTags"
-    path = createDownloadDir(srcDt, directory)
-    logging.info("Downloading %s", directory)
-    logging.debug('%s folder created inside Config Download folder', directory)
-    for tag in autoTagList:
-        tagJson = srcDt.getSingleAutoTag(tag['id'])
-        #dashboardJson = srcDt.getSingleDashboard(dashboard['id'])
-        file_name = tagJson["name"] + ".json"
-        del tagJson['metadata']
-        del tagJson['id']
-        storeEntity(tagJson, path, file_name)
-
-
-def downloadAlertingProfiles(srcDt):
-    autoTagList = srcDt.getAlertingProfiles()
-    directory = "AlertingProfiles"
-    path = createDownloadDir(srcDt, directory)
-
-    logging.debug('%s folder created inside Config Download folder', directory)
-    # print(autoTagList)
-    for tag in autoTagList:
-        tagJson = srcDt.getSingleAlertingProfile(tag['id'])
-        file_name = tagJson["displayName"] + ".json"
-        del tagJson['metadata']
-        del tagJson['id']
-        storeEntity(tagJson, path, file_name)
-
-
-def downloadCustomDevices(srcDt):
-    deviceList = srcDt.getCustomDevices()
-    directory = "CustomDevices"
-    path = createDownloadDir(srcDt, directory)
-    logging.info("Downloading %s", directory)
-    logging.debug('%s folder created inside Config Download folder', directory)
-
-    for device in deviceList:
-        deviceJson = srcDt.getCustomDevice(device['entityId'])
-        file_name = deviceJson["displayName"] + ".json"
-        storeEntity(deviceJson, path, file_name)
-
-
-def downloadProblemNotifications(srcDt):
-    deviceList = srcDt.getProblemNotifications()
-    directory = "ProblemNotifications"
-    path = createDownloadDir(srcDt, directory)
-    logging.info("Downloading %s", directory)
-    logging.debug('%s folder created inside Config Download folder', directory)
-
-    for device in deviceList:
-        deviceJson = srcDt.getSingleProblemNotification(device['id'])
-        file_name = deviceJson["name"] + ".json"
-        storeEntity(deviceJson, path, file_name)
-
-
-def uploadNewProblemNotificationsFromLocal(srcDt, dstDt):
-    '''read problem notifications from local download folder'''
-    directory = "ProblemNotifications"
-    parent_dir = os.path.join(srcDt.download_folder_path, srcDt.env_name)
-    # Custom events for alerting folder Path
-    path = os.path.join(parent_dir, directory)
-    localProblemNotifications = []
-    for file_name in [file for file in os.listdir(path) if file.endswith('.json')]:
-        with open(path + "\\" + file_name) as json_file:
-            localProblemNotifications.append(json.load(json_file))
-
-    '''push new problem notification to dst if it does not exist already'''
-    srcAlertingProfiles = srcDt.getAlertingProfiles()
-    dstAlertingProfiles = dstDt.getAlertingProfiles()
-    dstProblemNotifications = dstDt.getProblemNotifications()
-    dstProblemNotificationsNames = []
-    dstAlertingProfilesNames = []
-    #create list of problem notification names from dstEnv
-    for problemNotification in dstProblemNotifications:
-        dstProblemNotificationsNames.append(problemNotification["name"])
-    #create list of alerting profile names from dstEnv
-    for alertingProfile in dstAlertingProfiles:
-        dstAlertingProfilesNames.append(alertingProfile["name"])
-    for problemNotification in localProblemNotifications:
-        alertingProfileSrc = next((x for x in srcAlertingProfiles if x["id"] == problemNotification["alertingProfile"]), None)
-        alertingProfileDst = next((x for x in dstAlertingProfiles if x["name"] == alertingProfileSrc["name"]), None)
-        #check if current exists already in dstEnv based on name
-        if problemNotification["name"] not in dstProblemNotificationsNames:
-            #check if alerting profile defined in dstEnv as well based on name
-            if(alertingProfileSrc["name"] in dstAlertingProfilesNames):
-                problemNotification["alertingProfile"] = alertingProfileDst["id"]
-                del problemNotification['id']
-                dstDt.pushProblemNotification(problemNotification)
-            else:
-                logging.error("Alerting profile " + alertingProfileSrc["name"] + " was not found in dstEnv")
-
-
-def downloadApplicationDetectionRules(srcDt):
-    deviceList = srcDt.getApplicationDetectionRules()
-    directory = "ApplicationDetectionRules"
-    path = createDownloadDir(srcDt, directory)
-    logging.info("Downloading %s", directory)
-    logging.debug('%s folder created inside Config Download folder', directory)
-
-    for device in deviceList:
-        deviceJson = srcDt.getSingleApplicationDetectionRule(device['id'])
-        del deviceJson['metadata']
-        del deviceJson['id']
-        file_name = device["name"] + ".json"
-        storeEntity(deviceJson, path, file_name)
-
-
-def downloadCustomEventsForAlerting(srcDt):
-    customEventsList = srcDt.getCustomEventsForAlerting()
-    directory = "CustomEventsForAlerting"
-    path = createDownloadDir(srcDt, directory)
-    logging.info("Downloading %s", directory)
-    logging.debug('%s folder created inside Config Download folder', directory)
-
-    for customEvent in customEventsList:
-        customEventJson = srcDt.getSingleCustomEventForAlerting(customEvent['id'])
-        del customEventJson['metadata']
-        del customEventJson['id']
-        customEvent["name"] = re.sub("[/:*?\"<>|]","",customEvent["name"])
-        customEvent["name"].replace("\\", "")
-        file_name = customEvent["name"] + ".json"
-        storeEntity(customEventJson, path, file_name)
 
 
 def downlaodAll(srcDt):
     # download everything
-    #downloadAutoTags(srcDt)
-    #downloadDashboards(srcDt)
-    downloadAlertingProfiles(srcDt)
-    #downloadCustomDevices(srcDt)
-    #downloadProblemNotifications(srcDt)
-    #downloadApplicationDetectionRules(srcDt)
-    #downloadCustomEventsForAlerting(srcDt)
+    tools.downloadAutoTags(srcDt)
+    tools.downloadDashboards(srcDt)
+    tools.downloadAlertingProfiles(srcDt)
+    tools.downloadCustomDevices(srcDt)
+    tools.downloadProblemNotifications(srcDt)
+    tools.downloadApplicationDetectionRules(srcDt)
+    tools.downloadCustomEventsForAlerting(srcDt)
+    exit()
+
+def uplaod_all(srcDt):
+    #upload_notifications(srcDt)
+    upload_custom_events(srcDt)
+    #upload_alerting_profiles(srcDt)
+    exit()
 
 def main():
     '''main'''
+    # TODO: change src to dst !!
     srcDt, dstDt, params = init()
     if DOWNLOAD:
         # download everything
         downlaodAll(srcDt)
         #downlaodAll(dstDt)
     #uploadNewTags(srcDt, dstDt)
+    uplaod_all(srcDt)
     if CMD == 'updateTags':
         uploadNewTags(srcDt, dstDt)
     elif CMD == 'mergeTags':
         mergeTags(srcDt, dstDt)
-    elif CMD == "downloadDashboards":
-        downloadDashboards(srcDt)
     elif CMD == "updateCustomEventsForAlerting":
         uploadNewCustomEventsForAlerting(srcDt, dstDt)
     elif CMD == "updateCustomEventsForAlertingFromLocal":
         uploadNewCustomEventsForAlertingFromLocal(srcDt, dstDt)
-    elif CMD == "updateProblemNotificationsFromLocal":
-        uploadNewProblemNotificationsFromLocal(srcDt, dstDt)
     elif CMD == "updateAlertingProfilesFromLocal":
         uploadNewAlertingProfilesFromLocal(srcDt, dstDt)
 

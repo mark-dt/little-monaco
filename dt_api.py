@@ -40,7 +40,7 @@ class Dynatrace():
         logging.info('Uploading new Tag: {}'.format(tag['name']))
         _payload = json.dumps(tag)
         res = self.make_request(_url, method='POST', payload=_payload)
-        return res.status_code
+        return res
 
     def updateTag(self, tag):
         #TODO: updates the tag with the new passed ruls
@@ -84,7 +84,7 @@ class Dynatrace():
 
     def pushAlertingProfile(self, alertingProfile):
         _url = self.url + '/api/config/v1/alertingProfiles'
-        logging.info('Uploading new Alerting Profile: {}'.format(alertingProfile['displayName']))
+        logging.info('Uploading new Alerting Profile: %s', alertingProfile['displayName'])
         _payload = json.dumps(alertingProfile)
         res = self.make_request(_url, method='POST', payload=_payload)
         return res.status_code
