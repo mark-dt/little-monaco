@@ -82,7 +82,14 @@ class Dynatrace():
         res_json = json.loads(res.text)
         return res_json['values']
 
-    def getProblemNotification(self):
+    def pushAlertingProfile(self, alertingProfile):
+        _url = self.url + '/api/config/v1/alertingProfiles'
+        logging.info('Uploading new Alerting Profile: {}'.format(alertingProfile['displayName']))
+        _payload = json.dumps(alertingProfile)
+        res = self.make_request(_url, method='POST', payload=_payload)
+        return res.status_code
+
+    def getProblemNotifications(self):
         logging.debug('Downloading Problem Notifications')
         _url = self.url + '/api/config/v1/notifications'
         res = self.make_request(_url, method='GET')
@@ -95,6 +102,13 @@ class Dynatrace():
         res = self.make_request(_url, method='GET')
         res_json = json.loads(res.text)
         return res_json
+
+    def pushProblemNotification(self, problemNotification):
+        _url = self.url + '/api/config/v1/notifications'
+        logging.info('Uploading new Problem Notification: {}'.format(problemNotification['name']))
+        _payload = json.dumps(problemNotification)
+        res = self.make_request(_url, method='POST', payload=_payload)
+        return res.status_code
 
     def getSingleAlertingProfile(self, profileId):
         logging.debug('Downloading alerting profile %s', profileId)
@@ -144,6 +158,38 @@ class Dynatrace():
         res = self.make_request(_url, method='GET')
         res_json = json.loads(res.text)
         return res_json
+
+    def getCustomEventsForAlerting(self):
+        logging.debug('Downloading CustomEventsForAlerting')
+        _url = self.url + '/api/config/v1/anomalyDetection/metricEvents'
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        # Iterate through the objects in the array and pop (remove)
+        # non user defined custom events
+        for item in list(res_json['values']):
+            if item["id"].startswith("ruxit.") or item["id"].startswith("dynatrace."):
+                res_json['values'].remove(item)
+
+        return res_json['values']
+
+    def getSingleCustomEventForAlerting(self, profileId):
+        logging.debug('Downloading Custom Event for Alerting %s', profileId)
+        _url = self.url + '/api/config/v1/anomalyDetection/metricEvents/' + profileId
+        res = self.make_request(_url, method='GET')
+        res_json = json.loads(res.text)
+        return res_json
+
+    def deleteCustomEventForAlerting(self, customEventId):
+        _url = self.url + '/api/config/v1/anomalyDetection/metricEvents/' + customEventId
+        res = self.make_request(_url, method='DELETE')
+        return res.status_code
+
+    def pushCustomEventForAlerting(self, customEvent):
+        _url = self.url + '/api/config/v1/anomalyDetection/metricEvents/'
+        logging.info('Uploading new Custom Event for Alerting: {}'.format(customEvent['name']))
+        _payload = json.dumps(customEvent)
+        res = self.make_request(_url, method='POST', payload=_payload)
+        return res.status_code
 
     def make_request(self, url, parameters=None, method=None, payload=None):
         '''makes post or get request request'''
