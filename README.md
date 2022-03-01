@@ -2,15 +2,15 @@
 
 In order to be able to use this script an `config.ini` with following structure will be needed (`alias` is optional if not defined the environment id will be used instead):
 ```
-[E-Stage]
+[test]
 token = dt0c01.xxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-URL = https://imovipd.inet.bundesbank.de/e/39998a75-cdd4-4bb8-9253-b67d90092d5e
-alias = E-Stage
+URL = https://xxxxxxxx.sprint.dynatracelabs.com
+alias = Sprint
 ```
 
 Options
 
-`-s` or `--stage`:\
+`-e` or `--env`:\
 Specify the stage on which to perform an action
 
 `--config` (optional):\
@@ -30,9 +30,12 @@ Use if you want to have a more verbose output (defualt INFO), possible values:
 
 ## Download
 
-Download usage sample:
+Download usage sample (requires a `./logs` folder in the same directory as `main.py`):
 ```
-python.exe .\main.py --log-path .\logs\ -s E --config config.ini --download
+python.exe .\main.py --log-path .\logs\ --env TEST --config config.ini --download
+```
+```
+python3 main.py --log-path logs --env TEST --config config.ini --download
 ```
 
 

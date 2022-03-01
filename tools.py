@@ -21,7 +21,7 @@ class Tools():
         '''
         args = self.cmdline_args()
         config_path = args.config
-        env = args.stage
+        env = args.env
         # TODO: remove, only run in dry-run while developing
         self.dry_run = not args.execute
         self.download_folder = './download'
@@ -77,7 +77,6 @@ class Tools():
             exit(-1)
 
         try:
-            env = env + '-Stage'
             tmp_url = config[env]['URL']
             self.root_url = tmp_url[:-1] if tmp_url[-1] == '/' else tmp_url
             self.token = config[env]['token']
@@ -103,7 +102,7 @@ class Tools():
         # Make parser object
         parser = argparse.ArgumentParser(description=__doc__,
                                          formatter_class=argparse.RawDescriptionHelpFormatter)
-        parser.add_argument('-s', '--stage', required=True,
+        parser.add_argument('-e', '--env', required=True,
                             type=str, help='DT env')
         parser.add_argument('-c', '--config', type=str, help='Path to config',
                             default='./config.ini')
