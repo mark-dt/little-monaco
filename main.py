@@ -1,9 +1,12 @@
-from tools import Tools
-import dt_api
+from src.tools import Tools
+from src.dt_api import DtAPI
+
+
 
 def main():
     tools = Tools(__file__)
-    dt_api.DtAPI(tools)
+    DtAPI(tools)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

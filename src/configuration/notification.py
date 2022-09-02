@@ -1,11 +1,11 @@
-
 from src.generic_api import GenericApi
 
-class CustomEventForAlerting(GenericApi):
+
+class Notification(GenericApi):
     def __init__(self, tools) -> None:
         self.tools = tools
-        self.url = tools.root_url + '/api/config/v1/anomalyDetection/metricEvents'
-        self.folder = 'custom-events-for-alerting'
+        self.url = tools.root_url + "/api/config/v1/notifications"
+        self.folder = "notification"
         GenericApi.__init__(self, tools, self.url, self.folder)
 
     def get_all(self):
@@ -22,9 +22,3 @@ class CustomEventForAlerting(GenericApi):
 
     def post(self, custom_event):
         super().post(custom_event)
-
-
-    def delete_custom_event_for_alerting(self, customEventId):
-        _url = self.url + '/' + customEventId
-        res = self.make_request(_url, method='DELETE')
-        return res.status_code

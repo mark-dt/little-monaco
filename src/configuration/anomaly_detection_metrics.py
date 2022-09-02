@@ -1,14 +1,11 @@
-import os
-import logging
-import json
-
 from src.generic_api import GenericApi
 
-class ManagementZone(GenericApi):
+
+class CustomEventForAlerting(GenericApi):
     def __init__(self, tools) -> None:
         self.tools = tools
-        self.url = tools.root_url + '/api/config/v1/managementZones'
-        self.folder = 'management-zone'
+        self.url = tools.root_url + "/api/config/v1/anomalyDetection/metricEvents"
+        self.folder = "anomaly-detection-metrics"
         GenericApi.__init__(self, tools, self.url, self.folder)
 
     def get_all(self):
@@ -25,9 +22,3 @@ class ManagementZone(GenericApi):
 
     def post(self, custom_event):
         super().post(custom_event)
-
-
-    def delete_custom_event_for_alerting(self, customEventId):
-        _url = self.url + '/' + customEventId
-        res = self.tools.make_request(_url, method='DELETE')
-        return res.status_code
