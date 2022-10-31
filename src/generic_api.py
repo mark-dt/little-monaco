@@ -1,4 +1,5 @@
 import os
+import logging
 import json
 
 
@@ -96,8 +97,8 @@ class GenericApi:
                 self.tools.logger.error(f"No ID in entity: {entity}")
                 continue
 
-            if "params" in entity:
-                entity_json = self.get(entity_id, entity["params"])
+            if 'params' in entity:
+                entity_json = self.get(entity_id, entity['params'])
             else:
                 entity_json = self.get(entity_id)
             if entity_json is None:

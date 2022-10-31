@@ -26,7 +26,7 @@ class DeclarativeGrouping(GenericApi):
         res_json = json.loads(res.text)
         # Iterate through the objects in the array and pop (remove)
         # non user defined custom events
-        if "items" not in res_json:
+        if 'items' not in res_json:
             return []
         for item in list(res_json["items"]):
             if False and (item["id"].startswith("ruxit.") or item["id"].startswith("dynatrace.")):

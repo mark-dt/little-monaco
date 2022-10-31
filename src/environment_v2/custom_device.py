@@ -11,12 +11,12 @@ class CustomDevice(GenericApi):
         GenericApi.__init__(self, tools, self.url, self.folder)
 
     def get_all(self):
-        selector = 'type("CUSTOM_DEVICE")'
+        selector = 'type("CUSTOM_DEVICE"),tag("imo_device_type")'
         fields = "+properties.customProperties,+fromRelationships,+properties.detectedName"
         entities = self.tools.get_entities(selector, fields)
         for e in entities:
-            e["id"] = e["entityId"]
-            e["name"] = e["properties"]["detectedName"]
+            e['id'] = e['entityId']
+            e['name'] = e['properties']['detectedName']
         return entities
 
     def get(self, device_id):
@@ -25,7 +25,7 @@ class CustomDevice(GenericApi):
         res_json = json.loads(res.text)
         del res_json["lastSeenTms"]
         res_json["tags"].sort(key=self.extract_key)
-        # res_json['id'] = res_json["entityId"]
+        #res_json['id'] = res_json["entityId"]
         return res_json
 
     def extract_key(self, json):
