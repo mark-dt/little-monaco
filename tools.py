@@ -106,22 +106,6 @@ class Tools:
             self.token = config[args.environment]['token']
             logging.debug(self.root_url)
             logging.debug(self.token)
-            """
-            stage = _stage + "-Stage " + args.environment
-            cluster = args.stage + "-Stage " + "Cluster"
-            tmp_url = config[cluster]["URL"]
-            self.root_url = tmp_url[:-1] if tmp_url[-1] == "/" else tmp_url
-            if "Id" in config[stage]:
-                self.root_url = self.root_url + "/e/" + config[stage]["Id"]
-            else:
-                self.root_url = self.root_url
-            self.token = config[stage]["AdminToken"]
-            if "PaasToken" in config[stage]:
-                self.paas_token = config[stage]["PaasToken"]
-            self.env_name = self.extract_env_name()
-            # self.env_name = config[stage]["Id"]
-            self.env_alias = args.environment
-            """
         except Exception as exception:
             logging.error(f"[{exception}] Cannot find config {exception}. "
                         f"Reading config from {config_path}"
