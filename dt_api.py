@@ -27,28 +27,49 @@ class DtAPI:
     def __init__(self, tools):
         self.tools = tools
 
+        self.endpoints = []
         self.alerting_profiles = AlertingProfiles(tools)
+        self.endpoints.append(self.alerting_profiles)
+
         self.app_detection_rule = AppDetectionRule(tools)
+        self.endpoints.append(self.app_detection_rule)
         self.application_web = ApplicationWeb(tools)
+        self.endpoints.append(self.application_web)
         self.application_web_data_privacy = ApplicationWebDataPrivacy(
             tools, self.application_web.get_all()
         )
+        self.endpoints.append(self.application_web_data_privacy)
         self.auto_tag = AutoTag(tools)
+        self.endpoints.append(self.auto_tag)
         self.custom_device = CustomDevice(tools)
+        self.endpoints.append(self.custom_device)
         self.custom_service = CustomService(tools)
+        self.endpoints.append(self.custom_service)
         self.disk_event = DiskEvent(tools)
+        self.endpoints.append(self.disk_event)
         self.event_for_alerting = CustomEventForAlerting(tools)
+        self.endpoints.append(self.event_for_alerting)
         self.extensions = Extensions(tools)
+        self.endpoints.append(self.extensions)
         self.log_metrics = LogMetrics(tools)
+        self.endpoints.append(self.log_metrics)
         self.management_zone = ManagementZone(tools)
+        self.endpoints.append(self.management_zone)
         self.notification = Notification(tools)
+        self.endpoints.append(self.notification)
         self.pg_availability = PGAvailability(tools)
+        self.endpoints.append(self.pg_availability)
         self.pg_rum = PGRUM(tools)
+        self.endpoints.append(self.pg_rum)
 
         # download all objects defined in schemas
         self.objects = []
         for schema in schemas:
             self.objects.append(Object(tools, schema["id"], schema["folder"]))
+
+        if self.tools.download and self.tools.endpoints:
+            self.download_specific_endpoints(self.tools.endpoints)
+            return
 
         if self.tools.download:
             self.download_all()
@@ -56,6 +77,23 @@ class DtAPI:
 
         if self.tools.repo is not None:
             self.upload()
+
+    def download_specific_endpoints(self, endpoints):
+        # comma separated list of endpoints to download
+        if ',' not in endpoints:
+            #endpoints = endpoints.split(',')
+            endpoint_list = [endpoints]
+        else:
+            endpoint_list = endpoints.split(',')
+        self.tools.logger.debug(endpoint_list)
+        for endpoint in endpoint_list:
+            for ep in self.endpoints:
+                if ep.folder == endpoint:
+                    ep.download()
+        for obj in self.objects:
+            for endpoint in endpoint_list:
+                if obj.folder == endpoint:
+                    obj.download()
 
     def upload(self):
         # RR 2022-02-15: currently upload - not implemented

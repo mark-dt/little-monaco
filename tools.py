@@ -29,7 +29,7 @@ class Tools:
         #        print(args.config)
         config_path = args.config
         self.stage = args.stage
-        _stage = self.stage
+        self.environment = args.environment
         self.lock = threading.Lock()
         self.win_special_chars = '/\\:?"<>|*.'
         self.hash_map_file = "hash_map.txt"
@@ -98,7 +98,15 @@ class Tools:
             logging.error("[%s] Cannot open config %s", exeption, config_path)
             exit(-1)
 
+        self.endpoints = args.endpoints
+
         try:
+            tmp_url = config[args.environment]['url']
+            self.root_url = tmp_url[:-1] if tmp_url[-1] == "/" else tmp_url
+            self.token = config[args.environment]['token']
+            logging.debug(self.root_url)
+            logging.debug(self.token)
+            """
             stage = _stage + "-Stage " + args.environment
             cluster = args.stage + "-Stage " + "Cluster"
             tmp_url = config[cluster]["URL"]
@@ -113,6 +121,7 @@ class Tools:
             self.env_name = self.extract_env_name()
             # self.env_name = config[stage]["Id"]
             self.env_alias = args.environment
+            """
         except Exception as exception:
             logging.error(f"[{exception}] Cannot find config {exception}. "
                         f"Reading config from {config_path}"
@@ -133,11 +142,14 @@ class Tools:
             "-s", "--stage", required=True, type=str, help="Dynatrace Cluster Stage"
         )
         parser.add_argument(
+            "--endpoints", type=str, help="List of Endpoints to download"
+        )
+        parser.add_argument(
             "-c",
             "--config",
             type=str,
             help="Path to config (default ./config.ini)",
-            default=f"{os.environ['USERPROFILE']}/IMO/dynatrace.cfg",
+            #default=f"{os.environ['USERPROFILE']}/IMO/dynatrace.cfg",
         )
         parser.add_argument(
             "--log-level",
@@ -273,11 +285,10 @@ class Tools:
 
     def create_download_folder(self, directory):
         # Parent Directory path
-        root_dir = os.path.join(self.download_folder, self.stage + "-Stage")
-        parent_dir = os.path.join(root_dir, self.env_alias)
+        root_dir = os.path.join(self.download_folder, self.environment)
+        #parent_dir = os.path.join(root_dir, self.env_alias)
         # Dashboard folder Path
-        path = os.path.join(parent_dir, directory)
-
+        path = os.path.join(root_dir, directory)
         # create ./download
         if not os.path.isdir(self.download_folder):
             try:
@@ -294,33 +305,21 @@ class Tools:
             except Exception as e:
                 logging.error(f"Cannot create dir {root_dir}")
                 exit()
-        # create ./download/X-Stage/ENV
-        if not os.path.isdir(parent_dir):
+        if os.path.isdir(os.path.join(root_dir, directory)):
+            # Delete the exsiting Dashboard
             try:
-                os.mkdir(parent_dir)
-                logging.debug("Config Download folder created")
-            except Exception as e:
-                logging.error("Cannot create dir {}".format(parent_dir))
-                exit()
-        else:
-            if os.path.isdir(os.path.join(parent_dir, directory)):
-                # Delete the exsiting Dashboard
-                try:
-                    shutil.rmtree(path)
-                except OSError as e:
-                    print("Error: %s - %s." % (e.filename, e.strerror))
-                    logging.error("Unable to delete folder " + e.filename + ":" + e.strerror)
-
-        # Create the directory
-        # 'Dashboards' in
-        #  the corresponding env download folder
+                shutil.rmtree(path)
+            except OSError as e:
+                print("Error: %s - %s." % (e.filename, e.strerror))
+                logging.error("Unable to delete folder " + e.filename + ":" + e.strerror)
         try:
             os.mkdir(path)
-        except FileExistsError as e:
-            self.logger.error(
-                f"Close all files from the target download folder {path} Exception message: {e}"
-            )
+            logging.debug(f"Download folder {path} created")
+        except Exception as e:
+            logging.error(f"Cannot create dir {path}")
+            exit()
         return path
+
 
     def extract_env_name(self):
         tmp_url = self.root_url.split(".")
@@ -368,24 +367,22 @@ class Tools:
         file_handle.close()
         return res
 
-    def store_entity(self, jsonEntity, path, fileName):
+    def store_entity(self, jsonEntity, path, file_name):
         # lock because of map file writting
-        self.lock.acquire()
-        fileName = self.clean_file_name(fileName)
-        fileName += ".json"
-        completeName = os.path.join(path, fileName)
+        file_name = self.clean_file_name(file_name)
+        file_name += ".json"
+        complete_name = os.path.join(path, file_name)
         jsonString = json.dumps(jsonEntity, sort_keys=True, indent=4)
         # self.write_hash(path, jsonString)
         try:
-            jsonFile = open(completeName, "w")
+            jsonFile = open(complete_name, "w+")
         except Exception as e:
             logging.error("%s", e)
-            logging.error("Invalid name %s", completeName)
+            logging.error("Invalid name %s", complete_name)
             return
         jsonFile.write(jsonString)
         jsonFile.close()
-        logging.debug("Created %s", fileName)
-        self.lock.release()
+        logging.debug("Created %s", file_name)
 
     def find_new_files(self, current_files=None, new_files=None):
         srcTagNames = current_files

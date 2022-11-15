@@ -56,10 +56,7 @@ class Object(GenericApi):
                 logging.error(f"{e}: Could not extract name from {item}")
                 exit(-1)
 
-            #item["name"] = f"{name}_{item['id']}"
             item["name"] = f"{name}"
-            if False and (item["id"].startswith("ruxit.") or item["id"].startswith("dynatrace.")):
-                res_json["items"].remove(item)
 
         self.items = res_json["items"]
         return res_json["items"]
