@@ -112,7 +112,7 @@ class GenericApi:
                 del entity_json["id"]
 
             if "name" in entity:
-                name = entity["name"]
+                name = f"{entity['name']}_{entity_id}"
             else:
                 self.tools.logger.error(f"No Name in entity: {entity}")
                 continue
