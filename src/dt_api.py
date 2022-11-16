@@ -11,6 +11,7 @@ from src.configuration.application_web import ApplicationWeb
 from src.configuration.application_web_data_privacy import ApplicationWebDataPrivacy
 from src.configuration.auto_tag import AutoTag
 from src.configuration.custom_services import CustomService
+from src.configuration.dashboards import Dashboard
 from src.configuration.extensions import Extensions
 from src.configuration.log_metrics import LogMetrics
 from src.configuration.management_zone import ManagementZone
@@ -43,6 +44,8 @@ class DtAPI:
         self.endpoints.append(self.auto_tag)
         self.custom_device = CustomDevice(tools)
         self.endpoints.append(self.custom_device)
+        self.dashboard = Dashboard(tools)
+        self.endpoints.append(self.dashboard)
         self.custom_service = CustomService(tools)
         self.endpoints.append(self.custom_service)
         self.disk_event = DiskEvent(tools)
@@ -96,9 +99,7 @@ class DtAPI:
                     obj.download()
 
     def upload(self):
-        # RR 2022-02-15: currently upload - not implemented
-        #        self.disk_event.upload()
-        #        self.declarative_grouping.upload()
+        #   currently upload - not implemented
 
         self.alerting_profiles.upload()
         self.event_for_alerting.upload()
@@ -115,6 +116,7 @@ class DtAPI:
         self.auto_tag.download()
         self.custom_device.download()
         self.custom_service.download()
+        self.dashboard.download()
         self.disk_event.download()
         self.event_for_alerting.download()
         self.extensions.download()
@@ -123,6 +125,3 @@ class DtAPI:
         self.notification.download()
         for obj in self.objects:
             obj.download()
-        # TODO: atm only downloading WEBS
-        # self.pg_availability.download()
-        # self.pg_rum.download()

@@ -16,6 +16,8 @@ class GenericApi:
         res_json = json.loads(res.text)
         # Iterate through the objects in the array and pop (remove)
         # non user defined custom events
+        if "dashboards" in res_json:
+            return res_json["dashboards"]
         if "values" not in res_json:
             return []
         if not res_json["values"]:

@@ -28,12 +28,10 @@ class Tools:
 
         #        print(args.config)
         config_path = args.config
-        self.stage = args.stage
         self.environment = args.environment
         self.lock = threading.Lock()
         self.win_special_chars = '/\\:?"<>|*.'
         self.hash_map_file = "hash_map.txt"
-
 
         log_level = args.log_level
         if args.log_level == "DEBUG":
@@ -101,15 +99,16 @@ class Tools:
         self.endpoints = args.endpoints
 
         try:
-            tmp_url = config[args.environment]['url']
+            tmp_url = config[args.environment]["url"]
             self.root_url = tmp_url[:-1] if tmp_url[-1] == "/" else tmp_url
-            self.token = config[args.environment]['token']
+            self.token = config[args.environment]["token"]
             logging.debug(self.root_url)
             logging.debug(self.token)
         except Exception as exception:
-            logging.error(f"[{exception}] Cannot find config {exception}. "
-                        f"Reading config from {config_path}"
-                          )
+            logging.error(
+                f"[{exception}] Cannot find config {exception}. "
+                f"Reading config from {config_path}"
+            )
             exit(-1)
         self.header = {
             "Authorization": "Api-TOKEN " + self.token,
@@ -122,18 +121,13 @@ class Tools:
         parser = argparse.ArgumentParser(
             description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
         )
-        parser.add_argument(
-            "-s", "--stage", required=True, type=str, help="Dynatrace Cluster Stage"
-        )
-        parser.add_argument(
-            "--endpoints", type=str, help="List of Endpoints to download"
-        )
+        parser.add_argument("--endpoints", type=str, help="List of Endpoints to download")
         parser.add_argument(
             "-c",
             "--config",
             type=str,
             help="Path to config (default ./config.ini)",
-            #default=f"{os.environ['USERPROFILE']}/IMO/dynatrace.cfg",
+            # default=f"{os.environ['USERPROFILE']}/IMO/dynatrace.cfg",
         )
         parser.add_argument(
             "--log-level",
@@ -270,7 +264,7 @@ class Tools:
     def create_download_folder(self, directory):
         # Parent Directory path
         root_dir = os.path.join(self.download_folder, self.environment)
-        #parent_dir = os.path.join(root_dir, self.env_alias)
+        # parent_dir = os.path.join(root_dir, self.env_alias)
         # Dashboard folder Path
         path = os.path.join(root_dir, directory)
         # create ./download
@@ -303,7 +297,6 @@ class Tools:
             logging.error(f"Cannot create dir {path}")
             exit()
         return path
-
 
     def extract_env_name(self):
         tmp_url = self.root_url.split(".")
