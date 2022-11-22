@@ -1,16 +1,10 @@
 # little-monaco
 A `config.ini` file as follows is required in order to operate the scripts:
 ```
-[E-Stage Cluster]
-Stage = E
-URL = https://imovipd.inet.bundesbank.de
-TokenManagementToken = token
+[TEST]
+URL = https://
+token = token
 
-[E-Stage Entwicklung]
-Id = 39998a75-cdd4-4bb8-9253-b67d90092d5e
-TokenManagementToken = token
-AdminToken = token
-PersonalToken = token
 ```
 
 ## Options
